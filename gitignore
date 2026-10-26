@@ -1,0 +1,7 @@
+.env
+/storage/uploads/*
+!/storage/uploads/.gitkeep
+/storage/runtime/*
+!/storage/runtime/.gitkeep
+*.log
+*.zip
