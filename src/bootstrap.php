@@ -38,3 +38,4 @@ if (PHP_SAPI !== 'cli') {
     }
     $_SESSION['csrf_token'] ??= bin2hex(random_bytes(32));
 }
+// startup file voor de applicatie, dit is wat eerste wordt uitgevoerd.

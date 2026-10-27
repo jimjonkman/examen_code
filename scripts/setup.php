@@ -1,3 +1,5 @@
+<!-- hier ben ik weer, voor geheugensteuntje van mijzelf :) -->
+
 <?php
 declare(strict_types=1);
 require dirname(__DIR__) . '/src/bootstrap.php';
@@ -22,3 +24,5 @@ try {
     fwrite(STDERR, 'Installatie mislukt: ' . $exception->getMessage() . PHP_EOL);
     exit(1);
 }
+
+// maakt een lege database, als ik --seed typ dan krijg ik voorbeeldaccounts
