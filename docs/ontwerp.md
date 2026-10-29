@@ -6,8 +6,8 @@ Eén sollicitatieportaal voor meerdere bedrijven, elk met een eigen huisstijl.
 Een sollicitant moet worden beoordeeld voordat toegang tot de gespreksplanning mogelijk is.
 
 Bedrijf kiezen → gegevens, cv en motivatie insturen → e-mailadres bevestigen →
-beoordeling door de juiste afdeling → bij goedkeuring wachtwoord kiezen → inloggen.
-Gespreksplanning wordt hier later op aangesloten.
+beoordeling door de juiste afdeling → bij goedkeuring wachtwoord kiezen → inloggen →
+een gesprek bij de goedkeurende medewerker inplannen.
 
 ## Technische basis
 
@@ -28,16 +28,26 @@ de berichten af via SMTP. Sessies en CSRF-tokens beschermen accountacties.
 Thema's staan in `public/themes/<slug>/theme.json`. Kleuren en bestandsnamen worden gecontroleerd.
 Documentuploads worden op inhoud, type en grootte gecontroleerd en via een afgeschermde route opgehaald.
 
-Het bestaande schema bevat ook de geplande werktijden-, afspraken- en beheergegevens.
-Die tabellen zijn voorbereiding; de agenda en beheeromgeving zijn nog niet beschikbaar.
+De agenda gebruikt werktijden en afspraken in de database. Een sollicitant kan alleen plannen
+bij de medewerker die de sollicitatie heeft goedgekeurd, binnen hetzelfde bedrijf.
+Slots duren 30 minuten. Rijvergrendelingen en unieke database-indexen voorkomen dubbele
+boekingen. Elke sollicitatie heeft maximaal één actieve afspraak; annuleren maakt opnieuw
+boeken mogelijk. Een medewerker ziet en annuleert alleen de eigen gesprekken.
+
+Afspraakdatums worden opgeslagen in UTC en getoond in Europe/Amsterdam. Boeken en annuleren
+zetten in dezelfde transactie berichten voor beide deelnemers klaar. Een `text/calendar`-deel
+bevat een REQUEST of CANCEL met dezelfde afspraak-UID en een verhoogde SEQUENCE bij annuleren.
+De lokale planner synchroniseert niet met Microsoft Graph of reacties vanuit Outlook.
+
+Het bestaande schema ondersteunt deze functies al. De beheeromgeving blijft een vervolgstap.
 
 ## Werkverdeling
 
 | Dag | Onderdeel | Status |
 | --- | --- | --- |
 | Maandag | Projectstructuur, databaseontwerp, bedrijvenoverzicht en huisstijl. | Aanwezig. |
-| Dinsdag | Solliciteren, uploads, inloggen, verificatie, afdelingsgebonden beoordeling en e-mail. | Toegevoegd. |
-| Donderdag | Beschikbaarheid, afspraken boeken en annuleren, agenda-uitnodigingen. | Gepland. |
+| Dinsdag | Solliciteren, uploads, inloggen, verificatie, afdelingsgebonden beoordeling en e-mail. | Aanwezig. |
+| Donderdag | Beschikbaarheid, afspraken boeken en annuleren, agenda-uitnodigingen. | Toegevoegd. |
 | Vrijdag | Beheer, afronding, volledige controles en documentatie. | Gepland. |
 
 Woensdag is geen werkdag in deze planning. Alle aanvullingen komen rechtstreeks in

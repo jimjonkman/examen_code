@@ -158,15 +158,23 @@ final class Auth
     {
         Http::csrf();
         $user = Http::requireUser(['applicant']);
+        $company = Http::company();
         $query = Database::connection()->prepare('SELECT password_hash FROM users WHERE company_id = ? AND id = ?');
         $query->execute([$user['company_id'], $user['id']]);
         if (!password_verify(Http::string(Http::input(), 'password'), (string) $query->fetchColumn())) {
             Http::error('Het wachtwoord is onjuist.', 422);
         }
-        $files = Database::transaction(static function (PDO $database) use ($user): array {
+        $files = Database::transaction(static function (PDO $database) use ($user, $company): array {
             $query = $database->prepare('SELECT id, cv_path, letter_path FROM applications WHERE company_id = ? AND user_id = ? FOR UPDATE');
             $query->execute([$user['company_id'], $user['id']]);
             $application = $query->fetch();
+            if ($application) {
+                $query = $database->prepare('SELECT p.*, e.name AS employee_name, e.email AS employee_email FROM appointments p
+                    JOIN users e ON e.id = p.employee_id AND e.company_id = p.company_id
+                    WHERE p.company_id = ? AND p.application_id = ? ORDER BY p.employee_id, p.id');
+                $query->execute([$company['id'], $application['id']]);
+                AppointmentNotifications::deleteApplicant($database, $company, $query->fetchAll(PDO::FETCH_ASSOC));
+            }
             $query = $database->prepare('DELETE FROM users WHERE company_id = ? AND id = ?');
             $query->execute([$user['company_id'], $user['id']]);
             $query = $database->prepare('DELETE FROM mail_queue WHERE company_id = ? AND recipient = ?');

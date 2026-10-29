@@ -1,5 +1,7 @@
-<!-- Ik schrijf voor mijzelf notities op voor moeilijk te begrijpen code -gr Jim -->
 <?php
+/*
+<!-- Ik schrijf voor mijzelf notities op voor moeilijk te begrijpen code -gr Jim -->
+*/
 declare(strict_types=1);
 // ^checks voor type checking (int, string, etc.)
 if (PHP_SAPI !== 'cli') {

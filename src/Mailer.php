@@ -8,9 +8,13 @@ final class Mailer
         'application_received' => ['Sollicitatie ontvangen', "Beste {name},\n\nJe sollicitatie bij {company_name} is ontvangen. Je ontvangt een bericht zodra deze is beoordeeld."],
         'application_rejected' => ['Reactie op je sollicitatie', "Beste {name},\n\nBedankt voor je interesse in {company_name}. We hebben besloten niet verder te gaan met je sollicitatie. We wensen je veel succes."],
         'set_password' => ['Stel je wachtwoord in', "Beste {name},\n\nJe krijgt toegang tot het portaal van {company_name}. Stel binnen 48 uur een wachtwoord in via deze eenmalige link:\n{setup_url}\n\nNa het inloggen kun je verder in het portaal."],
+        'appointment_confirmation' => ['Bevestiging van je gesprek', "Beste {name},\n\nJe gesprek bij {company_name} met {employee_name} staat gepland op {starts_at}. Je ziet de afspraak ook in het portaal.\n\nOpen de agenda-uitnodiging in Outlook of een andere agenda. Wil je annuleren? Doe dit in het portaal; antwoorden via je agenda worden niet verwerkt in het portaal."],
+        'appointment_cancelled' => ['Je gesprek is geannuleerd', "Beste {name},\n\nJe gesprek bij {company_name} op {starts_at} is geannuleerd. Je kunt in het portaal een nieuw moment kiezen. De meegestuurde agenda-annulering hoort bij deze afspraak."],
+        'employee_appointment_confirmation' => ['Sollicitatiegesprek met {applicant_name}', "Beste {name},\n\nEr is bij {company_name} een sollicitatiegesprek met {applicant_name} ingepland op {starts_at}.\n\nOpen de agenda-uitnodiging in Outlook of een andere agenda. Je ziet de afspraak ook in het medewerkersportaal. Annuleer via het portaal; antwoorden via je agenda worden niet verwerkt in het portaal."],
+        'employee_appointment_cancelled' => ['Sollicitatiegesprek met {applicant_name} geannuleerd', "Beste {name},\n\nHet sollicitatiegesprek met {applicant_name} bij {company_name} op {starts_at} is geannuleerd. De meegestuurde agenda-annulering hoort bij deze afspraak. Je ziet de wijziging ook in het medewerkersportaal."],
     ];
 
-    public static function queue(PDO $database, array $company, string $to, string $template, array $variables): void
+    public static function queue(PDO $database, array $company, string $to, string $template, array $variables, ?array $calendar = null): void
     {
         if (!filter_var($to, FILTER_VALIDATE_EMAIL) || !isset(self::TEMPLATES[$template])) {
             throw new RuntimeException('Ongeldige e-mailconfiguratie.');
@@ -30,6 +34,10 @@ final class Mailer
             'from_address' => $company['mail_from_address'], 'from_name' => $company['mail_from_name'],
             'subject' => strtr($subject, $replacements), 'body' => strtr($body, $replacements),
         ];
+        if ($calendar !== null) {
+            self::validateCalendar($calendar);
+            $message['calendar'] = $calendar;
+        }
         // De outbox moet een toegangslink kunnen afleveren; versleuteling beschermt de ruwe token.
         $payload = self::encrypt($message);
         $query = $database->prepare('INSERT INTO mail_queue (company_id, recipient, template, payload, available_at) VALUES (?, ?, ?, ?, UTC_TIMESTAMP())');
@@ -72,6 +80,10 @@ final class Mailer
                 throw new RuntimeException('Ongeldig e-mailadres.');
             }
         }
+        $calendar = $message['calendar'] ?? null;
+        if ($calendar !== null) {
+            self::validateCalendar($calendar);
+        }
         $host = getenv('SMTP_HOST') ?: '';
         $encryption = getenv('SMTP_ENCRYPTION') ?: 'tls';
         if ($host === '' || !in_array($encryption, ['tls', 'ssl', 'none'], true) || ($encryption === 'none' && $GLOBALS['config']['environment'] !== 'local')) {
@@ -109,14 +121,42 @@ final class Mailer
                 'Date: ' . gmdate(DATE_RFC2822), 'Message-ID: <' . bin2hex(random_bytes(16)) . '@portal.local>',
                 'MIME-Version: 1.0',
             ];
-            $headers[] = 'Content-Type: text/plain; charset=UTF-8';
-            $headers[] = 'Content-Transfer-Encoding: base64';
-            $body = chunk_split(base64_encode($message['body']), 76, "\r\n");
+            if ($calendar === null) {
+                // Bestaande wachtwoord- en verificatiemails blijven gewone tekstmail.
+                $headers[] = 'Content-Type: text/plain; charset=UTF-8';
+                $headers[] = 'Content-Transfer-Encoding: base64';
+                $body = chunk_split(base64_encode($message['body']), 76, "\r\n");
+            } else {
+                // Outlook herkent een text/calendar-part met dezelfde METHOD als
+                // de VCALENDAR. multipart/alternative houdt ook de tekst leesbaar.
+                $boundary = 'calendar_' . bin2hex(random_bytes(16));
+                $headers[] = 'Content-Type: multipart/alternative; boundary="' . $boundary . '"';
+                $body = '--' . $boundary . "\r\n"
+                    . "Content-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n"
+                    . chunk_split(base64_encode($message['body']), 76, "\r\n")
+                    . '--' . $boundary . "\r\n"
+                    . 'Content-Type: text/calendar; charset=UTF-8; method=' . $calendar['method'] . "; name=\"appointment.ics\"\r\n"
+                    . "Content-Transfer-Encoding: base64\r\nContent-Disposition: inline; filename=\"appointment.ics\"\r\n\r\n"
+                    . chunk_split(base64_encode($calendar['content']), 76, "\r\n")
+                    . '--' . $boundary . "--\r\n";
+            }
             $wire = implode("\r\n", $headers) . "\r\n\r\n" . $body;
             self::command($connection, $wire . "\r\n.", [250]);
             self::command($connection, 'QUIT', [221]);
         } finally {
             fclose($connection);
+        }
+    }
+
+    private static function validateCalendar(array $calendar): void
+    {
+        $method = $calendar['method'] ?? null;
+        $content = $calendar['content'] ?? null;
+        if (!in_array($method, ['REQUEST', 'CANCEL'], true) || !is_string($content)
+            || !str_starts_with($content, "BEGIN:VCALENDAR\r\n")
+            || !str_ends_with($content, "END:VCALENDAR\r\n")
+            || !str_contains($content, "\r\nMETHOD:" . $method . "\r\n")) {
+            throw new RuntimeException('Ongeldige agenda-uitnodiging.');
         }
     }
 
