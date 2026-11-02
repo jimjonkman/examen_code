@@ -9,52 +9,220 @@ en de mailwachtrij met agenda-uitnodigingen. Beheerders beheren bedrijven, huiss
 medewerkers, afdelingen en werktijden via de beheeromgeving.
 Alle aanvullingen komen rechtstreeks in dezelfde projectmap.
 
-## Starten
+## Lokaal starten en testen
 
-Open PowerShell in de projectmap:
+Bij een nieuwe lokale installatie maakt `setup.php` de tabellen, het bedrijf **Scabro**
+en dit direct bruikbare beheerdersaccount aan:
+
+| Website-inloggegeven | Waarde |
+| --- | --- |
+| Naam en e-mailadres | `test@admin.nl` |
+| Wachtwoord | `1234` |
+| Inlogpagina | [Inloggen bij Scabro](http://127.0.0.1:8080/login.html?company=scabro) |
+
+Hiervoor zijn geen activatiemail of mailworker nodig. Het testaccount wordt alleen
+aangemaakt als `APP_ENV=local`. Gebruik het uitsluitend voor lokaal testen.
+
+Heb je al tabellen in je database? Volg dan [Bestaande database gebruiken](#bestaande-database-gebruiken).
+Voor een nieuwe database doorloop je de volgende vijf stappen.
+
+### 1. Controleer PHP en start MariaDB
+
+Benodigd: PHP 8.3 of nieuwer met `pdo_mysql`, `fileinfo`, `mbstring`, `sodium`, `dom`,
+`openssl`, `session` en `phar`, en MariaDB 10.5 of nieuwer.
+Er zijn geen Composer-pakketten of frontendbouwstappen.
+
+Open PowerShell in de projectmap en controleer PHP:
 
 ```powershell
 cd "C:\Users\JimJonkman\Desktop\examen_code"
+php --version
 ```
 
-Benodigd: PHP 8.3 of nieuwer met `pdo_mysql`, `fileinfo`, `mbstring`, `sodium`, `dom`,
-`openssl`, `session` en `phar`, en een draaiende MariaDB 10.5 of nieuwer.
-Er zijn geen Composer-pakketten of frontendbouwstappen.
+Als `php` niet wordt gevonden, voeg je PHP-map aan PATH toe of gebruik je de volledige
+locatie van `php.exe` bij ieder commando. Op deze computer staat die bijvoorbeeld in
+`C:\laragon\bin\php\php-8.3.33-Win32-vs16-x64\php.exe`.
+Een volledig pad voer je in PowerShell uit als `& "C:\pad\naar\php.exe" --version`.
 
-Bij een **nieuwe installatie**:
+Start MariaDB vanuit PowerShell. Open hiervoor een **aparte PowerShell als administrator**
+(zoek PowerShell in Start, klik met rechts en kies **Als administrator uitvoeren**):
 
-1. Maak een lege MariaDB-database en geef je databasegebruiker toegang.
-2. Kopieer `.env.example` naar `.env` en vul de databasegegevens in.
-3. Voer `php scripts/generate-key.php` uit en zet de volledige uitvoer, inclusief `base64:`, achter `APP_KEY=` in `.env`.
-4. Voer eenmalig `php scripts/setup.php` uit om de tabellen aan te maken.
-5. Stel `APP_URL` en SMTP in en maak één eigen beheerder aan met `scripts/create-admin.php`, zoals beschreven bij **Beheer**.
-6. Voer `php scripts/mail-worker.php` uit en stel via de ontvangen activatielink het beheerderswachtwoord in.
+```powershell
+Start-Service -Name MariaDB
+Get-Service -Name MariaDB
+```
 
-Bij een **bestaande database**:
+Bij `Status` moet `Running` staan. Draait de service al, dan kun je meteen verder.
+Je kunt dit administratorvenster daarna sluiten; MariaDB blijft draaien.
+Voer de overige projectcommando's uit in je gewone PowerShell in de projectmap.
 
-Bewaar je `.env` en database. Het schema is gelijk aan de vorige versie; er is geen
-migratie nodig. Voer `setup.php` niet opnieuw uit op een gevulde database. Voeg de nieuwe
-instellingen uit `.env.example` aan je `.env` toe. Vul eenmalig `APP_KEY` in als die nog leeg
-is. Bewaar een bestaande sleutel: eerder klaargezette mails zijn daarmee versleuteld.
-Gebruik de bestaande beheerder. Als er nog geen beheerder is, maak die eenmalig aan
-via de procedure bij **Beheer**. Het verwijderen van voorbeeldbestanden uit de broncode
-wijzigt geen bestaande databaseaccounts of dossiers; controleer een bestaande database
-afzonderlijk voordat je die online gebruikt.
+Krijg je een melding dat de service niet bestaat? Zoek de geïnstalleerde servicenaam met:
 
-Start je database apart en voer daarna uit:
+```powershell
+Get-Service -Name '*Maria*','*MySQL*' -ErrorAction SilentlyContinue
+```
+
+Gebruik de waarde uit de kolom `Name` in plaats van `MariaDB` bij `Start-Service` en
+`Get-Service`. Verschijnt er geen databaseservice, dan moet je MariaDB eerst installeren
+of de database via je lokale databasepakket starten.
+
+De database moet blijven draaien zolang je de website gebruikt. De standaardpoort
+is `3306`; gebruik je bewust een andere poort, vul die dan zowel bij de client als in `.env` in.
+
+### 2. Maak de database en een databasegebruiker aan
+
+Open de MariaDB-client vanuit PowerShell. Dit voorbeeld gebruikt poort `3306`:
+
+```powershell
+mariadb --host=127.0.0.1 --port=3306 --user=root --password
+```
+
+Wordt `mariadb` niet herkend? Gebruik de volledige locatie van de client. Op deze computer:
+
+```powershell
+& "C:\Program Files\MariaDB 13.0\bin\mariadb.exe" --host=127.0.0.1 --port=3306 --user=root --password
+```
+
+Vul bij de wachtwoordvraag het **MariaDB-rootwachtwoord** in dat bij de installatie
+is ingesteld. Tijdens het typen zie je geen tekens. Als je bij de installatie bewust
+geen wachtwoord hebt ingesteld, druk je op Enter.
+
+Je krijgt een SQL-prompt zoals `MariaDB [(none)]>`. Plak daar de volgende SQL-commando's
+(dus in de MariaDB-client, niet rechtstreeks in PowerShell):
+
+```sql
+CREATE DATABASE application_portal CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'portal'@'127.0.0.1' IDENTIFIED BY 'portal_lokaal_2026';
+GRANT ALL PRIVILEGES ON application_portal.* TO 'portal'@'127.0.0.1';
+EXIT;
+```
+
+Dit maakt een lege database `application_portal` en een databasegebruiker `portal`
+met het lokale voorbeeldwachtwoord `portal_lokaal_2026`. `EXIT;` brengt je terug in PowerShell.
+Je mag andere namen of een ander wachtwoord gebruiken, maar neem die dan exact over in `.env`.
+Bestaat de database of gebruiker al? Gebruik de bestaande gegevens en verwijder niets.
+
+**Deze databasegebruiker is iets anders dan het websiteaccount.** `portal` wordt door
+PHP gebruikt om met MariaDB te verbinden. In de website log je in als `test@admin.nl`
+met `1234`. Het websitewachtwoord hoort dus niet bij `DB_PASSWORD`.
+
+### 3. Vul `.env` in
+
+`.env` is het tekstbestand met de lokale instellingen, in dezelfde map als deze README.
+Als het nog niet bestaat, kopieer je het voorbeeld. Dit commando bewaart een bestaande `.env`:
+
+```powershell
+if (!(Test-Path .env)) { Copy-Item .env.example .env }
+notepad .env
+```
+
+Voor de SQL-commando's hierboven moeten deze waarden erin staan. Bestaat `.env` al?
+Vervang dan alle vijf `DB_*`-regels door onderstaande waarden als je de SQL uit stap 2
+hebt gebruikt; alleen `DB_PASSWORD` aanpassen is niet voldoende. Behoud je bestaande `APP_KEY`.
+
+```dotenv
+APP_ENV=local
+APP_URL=http://127.0.0.1:8080
+APP_TIMEZONE=Europe/Amsterdam
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=application_portal
+DB_USERNAME=portal
+DB_PASSWORD=portal_lokaal_2026
+SESSION_SECURE=false
+APP_KEY=
+SMTP_HOST=127.0.0.1
+SMTP_PORT=1025
+SMTP_ENCRYPTION=none
+SMTP_USERNAME=
+SMTP_PASSWORD=
+RETENTION_DAYS=28
+```
+
+| Instelling | Wat vul je in? |
+| --- | --- |
+| `APP_ENV` | `local` om het lokale testaccount aan te maken. |
+| `APP_URL` | Het adres waarop je de website opent; hier `http://127.0.0.1:8080`. |
+| `DB_HOST` / `DB_PORT` | Adres en poort van MariaDB; lokaal meestal `127.0.0.1` en `3306`. Staat er al `3307`, controleer dan op welke poort jouw server werkelijk draait. |
+| `DB_DATABASE` | De databasenaam uit `CREATE DATABASE`: hier `application_portal`. |
+| `DB_USERNAME` | De gebruiker uit `CREATE USER`: hier `portal`. |
+| `DB_PASSWORD` | Het wachtwoord uit `IDENTIFIED BY`: hier `portal_lokaal_2026`. |
+| `SESSION_SECURE` | `false` voor lokaal testen via HTTP, zodat de inlogsessie werkt. |
+| `APP_KEY` | Een eigen gegenereerde sleutel voor versleutelde e-mails; zie hieronder. |
+| `SMTP_*` | De lokale Mailpit-instellingen. Zie [E-mail lokaal testen](#e-mail-lokaal-testen) voor het starten. |
+| `APP_TIMEZONE` / `RETENTION_DAYS` | Kunnen voor deze test op `Europe/Amsterdam` en `28` blijven staan. |
+
+Genereer een sleutel als `APP_KEY` nog leeg is:
+
+```powershell
+php scripts/generate-key.php
+```
+
+Kopieer de volledige uitvoer, inclusief `base64:`, en plak die achter `APP_KEY=`.
+Bewaar een reeds ingevulde sleutel: bestaande wachtrijmails zijn daarmee versleuteld.
+Sla `.env` op voordat je verdergaat. Zet opmerkingen op een eigen regel met `#`;
+zet geen uitleg achter de waarden. Bewaar wachtwoorden en je sleutel buiten Git.
+
+### 4. Maak de tabellen en het testaccount aan
+
+Voer in PowerShell vanuit de projectmap uit:
+
+```powershell
+php scripts/setup.php
+```
+
+Dit gebruikt de database uit `.env` en maakt daarin alle tabellen aan. Met `APP_ENV=local`
+worden ook Scabro en de beheerder `test@admin.nl` / `1234` aangemaakt. Het wachtwoord
+wordt als bcrypt-hash opgeslagen. De bestaande Scabro-huisstijl wordt gebruikt.
+
+`setup.php` maakt de database en de MariaDB-gebruiker zelf niet aan: dat deed je bij stap 2.
+Het commando weigert een database waarin al tabellen staan om bestaande gegevens te bewaren.
+
+### 5. Start de website en log in
 
 ```powershell
 php scripts/serve.php
 ```
 
-Open [het portaal](http://127.0.0.1:8080/) en kies het ingestelde bedrijf.
-De rechtstreekse links gebruiken de eigen bedrijfsslug, bijvoorbeeld
-`/apply.html?company=mijn-bedrijf` en `/login.html?company=mijn-bedrijf`.
-De aanwezige Scabro-huisstijl blijft beschikbaar voor een bedrijf met slug `scabro`;
-de huisstijlbestanden maken zelf geen bedrijf of accounts aan.
+Laat deze terminal open. Open [Inloggen bij Scabro](http://127.0.0.1:8080/login.html?company=scabro)
+en vul `test@admin.nl` en `1234` in. Je komt daarna in de beheeromgeving.
+De [startpagina](http://127.0.0.1:8080/) toont de beschikbare bedrijven en via
+[Solliciteren bij Scabro](http://127.0.0.1:8080/apply.html?company=scabro) test je het formulier.
 
-Stop met Ctrl+C. Als `php` niet wordt gevonden, gebruik dan de volledige locatie van je
-PHP-programma. `APP_URL` moet overeenkomen met het adres waarop je de website opent.
+Gebruik steeds `127.0.0.1:8080`, overeenkomstig `APP_URL`. Stop de webserver met Ctrl+C.
+Bij een volgende testsessie hoef je alleen MariaDB en `php scripts/serve.php` te starten.
+Voor registratie, uitnodigingen en andere e-mailacties volg je ook **E-mail lokaal testen**.
+
+### Bestaande database gebruiken
+
+Bewaar je database, `.env` en bestaande `APP_KEY`. Controleer of de `DB_*`-instellingen
+naar jouw bestaande database wijzen. Het databaseschema is ongewijzigd; er is geen migratie nodig.
+Als de tabellen al bestaan, sla je `setup.php` over. Zet `APP_ENV=local`,
+`APP_URL=http://127.0.0.1:8080` en `SESSION_SECURE=false` in `.env` en voer uit:
+
+```powershell
+php scripts/seed-test-admin.php
+php scripts/serve.php
+```
+
+Het eerste commando voegt Scabro en het admin-testaccount toe als ze ontbreken.
+Het wijzigt geen bestaande bedrijfsgegevens, accounts of wachtwoorden. Als dit adminaccount
+al bestaat, behoudt het dus zijn huidige wachtwoord. Een inactief Scabro-bedrijf of een
+bestaand `test@admin.nl`-account met een andere rol bij Scabro wordt gemeld zonder wijziging.
+Het commando werkt uitsluitend met `APP_ENV=local`.
+
+### Veelvoorkomende problemen
+
+| Melding of probleem | Controle |
+| --- | --- |
+| `Connection refused` / verbinding geweigerd | Draait MariaDB? Komen `DB_HOST` en `DB_PORT` overeen met de server? `serve.php` start MariaDB niet. |
+| `Unknown database` | Maak eerst de database aan met stap 2; controleer `DB_DATABASE`. |
+| `Access denied` | Controleer `DB_USERNAME`, `DB_PASSWORD` en de rechten uit `GRANT`. Dit zijn je MariaDB-gegevens. |
+| `could not find driver` | Schakel `pdo_mysql` in de `php.ini` van je PHP-terminalversie in. `php --ini` toont welk bestand wordt gebruikt. |
+| `De database is niet leeg` | De tabellen bestaan al; gebruik `seed-test-admin.php` voor het lokale testaccount. |
+| Inloggen lukt, maar de sessie verdwijnt | Gebruik `SESSION_SECURE=false` bij HTTP en open steeds hetzelfde adres als `APP_URL`. |
+| Geen activatie- of bevestigingsmail | Start Mailpit en voer na de actie `php scripts/mail-worker.php` uit; zie de e-mailstappen hieronder. |
+| Poort `8080` is bezet | Start met `php scripts/serve.php --port=8081`, zet `APP_URL=http://127.0.0.1:8081` en open de links op die poort. |
 
 ## Medewerkersaccounts
 
@@ -80,7 +248,10 @@ Een gedeactiveerd account krijgt geen toegang meer. Het uitschakelen van een bed
 maakt de bedrijfslink onbeschikbaar en bewaart de gegevens. Na een slugwijziging gebruik
 je de nieuwe bedrijfslink. Logo's worden gedeeld door de openbare en ingelogde pagina's.
 
-Maak bij de installatie één eigen beheerder via de terminal. Vervang de bedrijfsgegevens,
+Voor een productie-installatie gebruik je een lege database met `APP_ENV=production`,
+je eigen HTTPS-adres als `APP_URL`, `SESSION_SECURE=true`, een eigen `APP_KEY` en beveiligde SMTP.
+Voer dan `php scripts/setup.php` uit; in productie worden alleen tabellen aangemaakt.
+Maak vervolgens één eigen beheerder via de terminal. Vervang de bedrijfsgegevens,
 het e-mailadres en de naam door je eigen gegevens:
 
 ```powershell
@@ -91,6 +262,8 @@ Gebruik een eigen e-mailadres en stel eerst `APP_KEY`, `APP_URL` en SMTP in.
 Dit commando werkt alleen als nog geen beheerder bestaat. Het kan een bestaand actief
 bedrijf met dezelfde slug gebruiken of een nieuw bedrijf aanmaken. Voer daarna de
 mailworker uit en stel via de ontvangen link een wachtwoord in.
+Gebruik voor productie een aparte database zonder het lokale testaccount en testgegevens.
+Het instellen van `APP_ENV=production` verwijdert een eerder aangemaakt testaccount niet.
 
 ## Gesprekken inplannen
 
@@ -126,7 +299,8 @@ SMTP_USERNAME=
 SMTP_PASSWORD=
 ```
 
-Op deze computer kun je de bestaande Mailpit-installatie starten in een aparte terminal:
+Op deze computer kun je de bestaande Mailpit-installatie starten in een aparte terminal
+als die nog niet draait:
 
 ```powershell
 & "C:\laragon\bin\mailpit\1.22.3\mailpit.exe" --smtp 127.0.0.1:1025 --listen 127.0.0.1:8025
@@ -204,7 +378,8 @@ voor de technische maatregelen en onderhoudsgrenzen.
 - `api/`: JSON-routes voor bedrijven, sessies, accounts, sollicitaties, documenten, afspraken en beheer.
 - `src/` en `config/`: databaseverbinding, authenticatie, uploads, mail en overige backendcode.
 - `database/`: het databaseschema, zonder vooraf ingestelde bedrijven of accounts.
-- `scripts/`: installatie, eerste beheerder, sleutelgeneratie, mailworker, cleanup en ontwikkelserver.
+- `scripts/`: installatie met lokaal testaccount, aanvullende lokale seeding, eerste productiebeheerder,
+  sleutelgeneratie, mailworker, cleanup en ontwikkelserver.
 - `tests/`: zelfstandige controles van validatie, versleuteling, agenda-inhoud, SMTP en thema's.
 - `docs/`: ontwerp, testplan en beveiligings- en onderhoudsinformatie.
 

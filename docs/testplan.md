@@ -32,7 +32,7 @@ De resultaten van de afronding staan in [verificatie.md](verificatie.md).
 | Agenda-e-mail | Beide deelnemers krijgen REQUEST/CANCEL met stabiele UID en oplopende SEQUENCE. |
 | Bedrijfsbeheer | Alleen beheerder; toevoegen, wijzigen, slug, huisstijl, sjablonen en deactiveren werken samen. |
 | Medewerkersbeheer | Uitnodiging, wachtwoordactivering, afdeling, rooster en deactivering; geen onbedoelde accountwijziging. |
-| Initialisatie | Eerste beheerder mogelijk; opnieuw uitvoeren overschrijft geen bestaande beheerder. |
+| Initialisatie | Lokale setup maakt Scabro en test@admin.nl / 1234 direct bruikbaar; herhaalde seeding behoudt bestaande gegevens en wachtwoorden. Productiesetup maakt alleen tabellen; lokale seeding weigert buiten APP_ENV=local. De eerste productiebeheerder is eenmalig aan te maken. |
 | Cleanup | Alleen oude afgewezen/onbevestigde dossiers weg; recente en goedgekeurde dossiers blijven. |
 | Accountverwijdering | Wachtwoord en eigen account vereist; documenten weg; anonieme agenda-annulering voor medewerker. |
 | SMTP-storing | Bericht blijft versleuteld klaarstaan; retry werkt; geslaagde aflevering wist de payload. |

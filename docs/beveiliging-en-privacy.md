@@ -16,6 +16,13 @@ gebonden aan bedrijf en doel en worden onder een databasevergrendeling verbruikt
 Alleen de tokenhash staat in de tokentabel. Een nieuwe uitnodiging trekt eerdere
 ongebruikte tokens voor hetzelfde doel in.
 
+Bij `APP_ENV=local` maakt de installatie voor handmatig testen Scabro en een direct
+geverifieerde beheerder `test@admin.nl` met wachtwoord `1234` aan. Het wachtwoord staat
+als bcrypt-hash in de database. `scripts/seed-test-admin.php` voegt dit account ook aan
+een bestaande lokale database toe zonder bestaande accounts of wachtwoorden te wijzigen.
+Het seedcommando weigert buiten de lokale omgeving. Het normale beleid voor het instellen
+van wachtwoorden blijft minimaal 12 tekens.
+
 Wijzigende verzoeken vereisen een CSRF-token. Login vernieuwt de sessie-ID en het
 CSRF-token. Cookies zijn HttpOnly en SameSite=Lax; de Secure-instelling wordt via
 `SESSION_SECURE` geregeld. De actieve status van het account wordt opnieuw gecontroleerd.
@@ -76,6 +83,8 @@ moeten bij ingebruikname door de beheerder worden vastgelegd.
 
 Gebruik op de uiteindelijke host HTTPS, `APP_ENV=production`, `SESSION_SECURE=true`,
 een eigen `APP_KEY`, één eigen beheerdersaccount en werkende beveiligde SMTP.
+Gebruik een aparte productiedatabase zonder het lokale testaccount en testgegevens.
+Een wijziging van `APP_ENV` verwijdert eerder aangemaakte accounts niet.
 Richt het eerste beheerdersaccount eenmalig in met `scripts/create-admin.php` en
 een eigen e-mailadres. Medewerkers ontvangen daarna persoonlijke uitnodigingen.
 `SMTP_ENCRYPTION=none` uit de lokale mailtestinstructies is uitsluitend bedoeld voor

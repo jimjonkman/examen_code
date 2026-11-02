@@ -164,6 +164,25 @@ $tests['CSRF accepteert uitsluitend de actuele sessietoken'] = static function (
     unset($_SERVER['HTTP_X_CSRF_TOKEN']);
     rejects(static fn () => Http::csrf(), HttpException::class, 419);
 };
+$tests['Admin-testaccount weigert niet-lokale omgevingen vóór een databaseverbinding'] = static function (): void {
+    $original = $GLOBALS['config'];
+    try {
+        // Een fout in de guard mag nooit de bestaande applicatiedatabase benaderen.
+        $GLOBALS['config']['database'] = ['host' => '127.0.0.1', 'port' => 1, 'name' => 'unused', 'username' => 'unused', 'password' => ''];
+        foreach (['production', 'staging', ''] as $environment) {
+            $GLOBALS['config']['environment'] = $environment;
+            try {
+                LocalTestAdmin::seed();
+                throw new LogicException('Het testaccount is buiten de lokale omgeving toegestaan.');
+            } catch (RuntimeException $exception) {
+                check($exception::class === RuntimeException::class
+                    && str_contains($exception->getMessage(), 'APP_ENV=local'), 'De lokale guard moet weigeren voordat de database wordt geopend.');
+            }
+        }
+    } finally {
+        $GLOBALS['config'] = $original;
+    }
+};
 
 foreach ($tests as $name => $test) {
     try {

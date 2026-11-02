@@ -19,9 +19,14 @@ try {
     }
     $database->exec(file_get_contents(dirname(__DIR__) . '/database/schema.sql'));
     echo "Database ingericht." . PHP_EOL;
+    if ($GLOBALS['config']['environment'] === 'local') {
+        LocalTestAdmin::seed();
+        echo 'Lokaal admin-testaccount aangemaakt bij Scabro: test@admin.nl / 1234.' . PHP_EOL;
+        echo 'Inloggen: ' . Http::url('/login.html', ['company' => 'scabro']) . PHP_EOL;
+    }
 } catch (Throwable $exception) {
     fwrite(STDERR, 'Installatie mislukt: ' . $exception->getMessage() . PHP_EOL);
     exit(1);
 }
 
-// Richt alleen de tabellen in; de eerste beheerder maak je met create-admin.php.
+// Alleen lokaal wordt ook het testaccount aangemaakt. Gebruik voor productie create-admin.php.

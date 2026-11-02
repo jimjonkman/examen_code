@@ -11,6 +11,21 @@ installaties gebruiken `scripts/setup.php` en richten met `scripts/create-admin.
 de vermelding van geteste demoscripts is historisch. Bestaande databases zijn hiermee
 niet automatisch opgeschoond. Geïsoleerde testfixtures blijven onderdeel van de regressietests.
 
+Latere wijziging op **2 november 2026**: voor lokaal testen maakt `scripts/setup.php`
+bij `APP_ENV=local` nu Scabro en de beheerder `test@admin.nl` / `1234` aan.
+`scripts/seed-test-admin.php` ondersteunt bestaande lokale databases zonder accounts
+of wachtwoorden te overschrijven. De installatiehandleiding en `.env.example` zijn
+hierop aangepast. De historische resultaten hieronder gelden voor de eerdere versie.
+
+Voor deze wijziging zijn **42/42 zelfstandige controles** en **26/26 integratiecontroles**
+geslaagd, met PHP 8.3.33 en een aparte MariaDB 13.0.2-server op loopback. De integratie
+controleerde lokale setup, herhaalbaarheid, behoud van gewijzigde wachtwoorden,
+conflicten met bestaande accounts of een inactief bedrijf, weigering buiten `local`,
+productiesetup zonder accounts, HTTP-login en beheerrechten. Ook de SQL-instructies
+uit de README en de verbinding met de bijbehorende databasegebruiker zijn uitgevoerd.
+De bestaande `.env` en applicatiedatabase zijn hierbij niet gewijzigd; de tijdelijke
+testservers zijn na afloop gestopt. PHP-syntaxcontrole en `git diff --check` zijn geslaagd.
+
 ## Omgeving en resultaten
 
 Omgeving: PHP 8.3.33, MariaDB 13.0.2 en Node.js 24.21.0 op Windows.
