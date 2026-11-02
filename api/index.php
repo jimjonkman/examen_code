@@ -76,6 +76,26 @@ try {
             default => Http::error('Deze methode is niet toegestaan.', 405),
         };
     }
+    if ($path === '/api/admin/companies') {
+        match ($method) {
+            'GET' => AdminController::companies(),
+            'POST' => AdminController::createCompany(),
+            default => Http::error('Deze methode is niet toegestaan.', 405),
+        };
+    }
+    if ($method === 'PATCH' && preg_match('~^/api/admin/companies/([1-9][0-9]*)$~D', $path, $matches)) {
+        AdminController::updateCompany((int) $matches[1]);
+    }
+    if ($path === '/api/admin/employees') {
+        match ($method) {
+            'GET' => AdminController::employees(),
+            'POST' => AdminController::createEmployee(),
+            default => Http::error('Deze methode is niet toegestaan.', 405),
+        };
+    }
+    if ($method === 'PATCH' && preg_match('~^/api/admin/employees/([1-9][0-9]*)$~D', $path, $matches)) {
+        AdminController::updateEmployee((int) $matches[1]);
+    }
     Http::error('Dit API-adres bestaat niet.', 404);
 } catch (HttpException $exception) {
     http_response_code($exception->status);

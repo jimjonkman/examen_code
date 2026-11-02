@@ -9,7 +9,6 @@ $sent = 0;
 $failed = 0;
 for ($index = 0; $index < 50; $index++) {
     $result = Database::transaction(static function (PDO $database): ?bool {
-        // Eén korte batch voorkomt dubbele verzending door gelijktijdige cronprocessen.
         $query = $database->query('SELECT * FROM mail_queue WHERE sent_at IS NULL AND attempts < 5 AND available_at <= UTC_TIMESTAMP() ORDER BY id LIMIT 1 FOR UPDATE');
         $message = $query->fetch();
         if (!$message) {

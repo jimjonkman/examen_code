@@ -11,6 +11,7 @@ if (!document.body.dataset.page) {
 }
 const app = $('#app');
 let employeeView = 0;
+let adminView = null;
 const defaultPositions = {
   'assembly-technician':'Assembly technician',
   'bodyshop-coating-technician':'Bodyshop coating technician',
@@ -68,7 +69,7 @@ function todayValue() { const parts = Object.fromEntries(new Intl.DateTimeFormat
 function message(target, text, type = 'error') { const node = typeof target === 'string' ? $(target) : target; if (!node) return; node.className = 'message ' + type; node.textContent = text; node.hidden = !text; node.setAttribute('role',type === 'error' ? 'alert' : 'status'); }
 function busy(button, loading) { button.disabled = loading; if (loading) { button.dataset.originalText = button.textContent; button.textContent = 'Even geduld…'; } else { button.textContent = button.dataset.originalText || button.textContent; } }
 function statusBadge(status) { const badge = el('span','badge ' + status,({pending:'In afwachting',approved:'Goedgekeurd',rejected:'Afgewezen',scheduled:'Gepland',confirmed:'Gepland',cancelled:'Geannuleerd',active:'Actief',inactive:'Inactief'})[status] || status); return badge; }
-function roleHome(role) { return role === 'employee' ? 'employee.html' : role === 'applicant' ? 'schedule.html' : 'dashboard.html'; }
+function roleHome(role) { return role === 'employee' ? 'employee.html' : role === 'applicant' ? 'schedule.html' : 'admin.html'; }
 function choices(kind) { return Portal.session?.[kind] || (kind === 'positions' ? defaultPositions : defaultDepartments); }
 function choiceLabel(kind, value) { return choices(kind)[value] || 'Nog niet gekozen'; }
 function populateChoices(select, kind, selected = '') {
@@ -109,7 +110,7 @@ function neutral(text = 'Open het portaal via de persoonlijke link van het bedri
 }
 function shell(title, subtitle, content, active, action = '') {
   const user = Portal.session.user;
-  const links = user.role === 'employee' ? [['employee.html','file','Sollicitaties','employee'],['employee.html','calendar','Mijn gesprekken','appointments',{view:'appointments'}]] : user.role === 'applicant' ? [['dashboard.html','user','Mijn overzicht','dashboard'],['schedule.html','calendar','Mijn gesprek','schedule']] : [['dashboard.html','user','Mijn overzicht','dashboard']];
+  const links = user.role === 'employee' ? [['employee.html','file','Sollicitaties','employee'],['employee.html','calendar','Mijn gesprekken','appointments',{view:'appointments'}]] : user.role === 'applicant' ? [['dashboard.html','user','Mijn overzicht','dashboard'],['schedule.html','calendar','Mijn gesprek','schedule']] : [['admin.html','building','Bedrijven & beheer','admin']];
   app.innerHTML = `<div class="app-layout"><aside class="sidebar"><a class="brand" data-brand href="${Portal.link(roleHome(user.role))}"></a><p class="sidebar-label">Werkruimte</p><nav class="nav-links" aria-label="Hoofdnavigatie">${links.map(([href,name,label,key,params]) => `<a class="nav-link ${key === active ? 'active' : ''}" href="${Portal.link(href,params)}" ${key === active ? 'aria-current="page"' : ''}>${icon(name)}${label}</a>`).join('')}</nav><div class="sidebar-bottom"><div class="user-box"><span class="avatar" id="user-initials"></span><div><span class="user-name" id="user-name"></span><span class="user-role"></span></div></div><button class="logout-btn" data-logout>${icon('logout')} Uitloggen</button></div></aside><main class="app-body"><div class="app-topbar"><div class="breadcrumb"><span data-company-name></span><span>/</span><span id="breadcrumb-page"></span></div><button class="text-btn mobile-logout" data-logout>Uitloggen ${icon('logout')}</button><span class="topbar-status">Beveiligde omgeving</span></div><div class="page-heading"><div><p class="eyebrow">${user.role === 'applicant' ? 'Jouw volgende stap' : 'Overzicht'}</p><h1 id="page-title"></h1><p id="page-subtitle"></p></div>${action || '<span class="heading-aside" id="today-date"></span>'}</div><div id="page-message" class="message" hidden></div>${user.role === 'employee' ? employeeDepartmentPanel() : ''}${content}<footer class="app-footer"><span>Sollicitatieportaal · <span data-company-name></span></span><span>Veilig verbonden</span></footer></main></div>`;
   put('#page-title',title); put('#breadcrumb-page',title); put('#page-subtitle',subtitle);
   put('#user-initials',initials(user.name)); put('#user-name',user.name); put('.user-role',({admin:'Beheerder',employee:'Medewerker',applicant:'Sollicitant'})[user.role]);
@@ -290,7 +291,7 @@ async function employeeAppointments() {
 
 async function schedulePage() {
   if (!requireRole(['applicant'])) return;
-  shell('Laten we kennismaken.','Kies een moment dat bij je past. We kijken uit naar je verhaal.',`<div class="schedule-grid"><section class="card calendar-card"><div class="panel-header"><div><h2>Kies jouw moment</h2><p>Alle tijden zijn in de Nederlandse tijdzone.</p></div></div><div class="panel-header"><h2 id="calendar-month"></h2><div class="calendar-controls"><button class="btn btn-secondary btn-small" id="previous-month" aria-label="Vorige maand">${icon('back')}</button><button class="btn btn-secondary btn-small" id="next-month" aria-label="Volgende maand">${icon('arrow')}</button></div></div><div class="calendar-weekdays"><span>Ma</span><span>Di</span><span>Wo</span><span>Do</span><span>Vr</span><span>Za</span><span>Zo</span></div><div class="calendar-days" id="calendar-days" aria-label="Kies een datum"></div><div class="slots-section"><div class="slots-heading"><strong id="slot-date"></strong><span>Gesprek · 30 minuten</span></div><div id="slots-container"><div class="loading"><span class="spinner"></span>Beschikbaarheid laden…</div></div><div class="slot-legend"><span><i></i>Beschikbaar</span><span><i></i>Niet beschikbaar</span></div></div></section><aside><section class="card appointment-card"><h2>Jouw kennismaking</h2><div class="interviewer"><span class="avatar" id="reviewer-initials">—</span><div><strong id="reviewer-name">Medewerker laden…</strong><span>Jouw contactpersoon</span></div></div><div id="booking-summary"><div class="appointment-info">${icon('calendar')}<div><strong id="booking-date">Kies een datum</strong><small id="booking-time">En een beschikbaar moment</small></div></div><div class="appointment-info">${icon('clock')}<div><strong>Een eerste kennismaking</strong><small>We nemen de tijd voor jouw verhaal.</small></div></div></div><div id="booking-message" class="message" hidden></div><button class="btn btn-block" id="book-button" disabled>Bevestig mijn gesprek ${icon('arrow')}</button><p class="form-fineprint" id="booking-fineprint">Je ontvangt een bevestiging per e-mail.</p></section><section class="help-card"><h3>Goed om te weten</h3><p>Je spreekt met de medewerker die jouw sollicitatie heeft beoordeeld. Grijze momenten zijn bezet of vallen buiten werktijd.</p></section></aside></div><div class="dashboard-note"><span>${icon('shield')} Alleen jij en je contactpersoon kunnen jouw afspraak bekijken.</span></div>`,'schedule');
+  shell('Laten we kennismaken.','Kies een moment dat bij je past. We kijken uit naar je verhaal.',`<div class="schedule-grid"><section class="card calendar-card"><div class="panel-header"><div><h2>Kies jouw moment</h2><p>Alle tijden zijn in de Nederlandse tijdzone.</p></div></div><div class="panel-header"><h2 id="calendar-month"></h2><div class="calendar-controls"><button class="btn btn-secondary btn-small" id="previous-month" aria-label="Vorige maand">${icon('back')}</button><button class="btn btn-secondary btn-small" id="next-month" aria-label="Volgende maand">${icon('arrow')}</button></div></div><div class="calendar-weekdays"><span>Ma</span><span>Di</span><span>Wo</span><span>Do</span><span>Vr</span><span>Za</span><span>Zo</span></div><div class="calendar-days" id="calendar-days" aria-label="Kies een datum"></div><div class="slots-section"><div class="slots-heading"><strong id="slot-date"></strong><span>Gesprek · 30 minuten</span></div><div id="slots-container"><div class="loading"><span class="spinner"></span>Beschikbaarheid laden…</div></div><div class="slot-legend"><span><i></i>Beschikbaar</span><span><i></i>Niet beschikbaar</span></div></div></section><aside><section class="card appointment-card"><h2>Jouw kennismaking</h2><div class="interviewer"><span class="avatar" id="reviewer-initials">—</span><div><strong id="reviewer-name">Medewerker laden…</strong><span>Jouw contactpersoon</span></div></div><div id="booking-summary"><div class="appointment-info">${icon('calendar')}<div><strong id="booking-date">Kies een datum</strong><small id="booking-time">En een beschikbaar moment</small></div></div><div class="appointment-info">${icon('clock')}<div><strong>Een eerste kennismaking</strong><small>We nemen de tijd voor jouw verhaal.</small></div></div></div><div id="booking-message" class="message" hidden></div><button class="btn btn-block" id="book-button" disabled>Bevestig mijn gesprek ${icon('arrow')}</button><p class="form-fineprint" id="booking-fineprint">Je ontvangt een bevestiging per e-mail.</p></section><section class="help-card"><h3>Goed om te weten</h3><p>Je spreekt met de medewerker die jouw sollicitatie heeft beoordeeld. Grijze momenten zijn bezet of vallen buiten werktijd.</p></section></aside></div><div class="dashboard-note"><span>${icon('shield')} Alleen jij en je contactpersoon kunnen jouw afspraak bekijken.</span><button class="text-btn" id="remove-account">Mijn gegevens verwijderen</button></div>`,'schedule');
   let selectedDate = todayValue(); let month = new Date(selectedDate + 'T12:00:00'); let selectedSlot = null; let appointment = null; let loadingId = 0;
   const horizon = new Date(selectedDate + 'T12:00:00'); horizon.setDate(horizon.getDate()+90); const lastDate = localDate(horizon);
   const renderCalendar = () => {
@@ -325,16 +326,232 @@ async function schedulePage() {
     if (appointment) { const id = appointment.id; confirmDialog('Je gesprek annuleren?','Het tijdstip komt weer vrij. Je kunt daarna een nieuw moment kiezen.','Gesprek annuleren',async () => { await Portal.api('/api/appointments/' + id,{method:'DELETE'}); appointment = null; await loadSlots(); message('#booking-message','Je gesprek is geannuleerd. Kies gerust een nieuw moment.','info'); },true); }
     else if (selectedSlot) { const slot = selectedSlot; confirmDialog('Dit moment vastleggen?',dateText(slot.starts_at,{weekday:'long',month:'long'}) + ' van ' + timeText(slot.starts_at) + ' tot ' + timeText(slot.ends_at) + '. Je ontvangt een bevestiging per e-mail.','Bevestig mijn gesprek',async () => { try { await Portal.api('/api/appointments',{method:'POST',body:{starts_at:slot.starts_at}}); await loadSlots(); } catch (error) { if (error.status === 409) await loadSlots(); throw error; } }); }
   });
+  $('#remove-account').addEventListener('click',removeAccountDialog);
   renderCalendar(); await loadSlots();
 }
 
-function dashboardPage() {
-  if (!requireRole(['applicant','admin'])) return;
-  const user = Portal.session.user;
-  if (user.role === 'admin') {
-    shell('Welkom in het portaal.','Je bent ingelogd als beheerder.', '<section class="card detail-card"><h2>Je account is actief</h2><p class="small muted">Het portaal ontvangt sollicitaties en het team kan deze beoordelen. Het bedrijfsbeheer wordt later toegevoegd.</p><a class="btn btn-secondary" href="' + Portal.link('apply.html') + '">Bekijk het sollicitatieformulier ' + icon('arrow') + '</a></section>', 'dashboard');
-    return;
+function removeAccountDialog() {
+  const overlay = el('div','modal-backdrop'); overlay.innerHTML = '<section class="modal" role="dialog" aria-modal="true" aria-labelledby="delete-title"><h2 id="delete-title">Je gegevens verwijderen?</h2><p>Je account, sollicitatie en documenten worden verwijderd. Een geplande afspraak wordt geannuleerd. Dit kan niet ongedaan worden gemaakt.</p><form><label class="field"><span class="field-label">Bevestig met je wachtwoord</span><input class="input" type="password" name="password" autocomplete="current-password" required></label><div class="message" hidden></div><div class="modal-actions"><button type="button" class="btn btn-secondary" data-close>Behouden</button><button class="btn btn-danger" type="submit">Definitief verwijderen</button></div></form></section>';
+  const previous = document.activeElement; const close = () => { overlay.remove(); previous?.focus(); };
+  $('[data-close]',overlay).addEventListener('click',close); overlay.addEventListener('keydown',event => { if (event.key === 'Escape') close(); });
+  $('form',overlay).addEventListener('submit',async event => { event.preventDefault(); const button = $('button[type=submit]',overlay); busy(button,true); try { await Portal.api('/api/account',{method:'DELETE',body:{password:$('input',overlay).value}}); location.href = Portal.link('apply.html'); } catch (error) { message($('.message',overlay),error.message); busy(button,false); } });
+  document.body.append(overlay); $('input',overlay).focus();
+}
+
+async function adminPage() {
+  if (!requireRole(['admin'])) return;
+  const currentView = {}; adminView = currentView;
+  shell('Een eigen plek voor elk bedrijf.','Beheer bedrijven, geef het portaal een eigen gezicht en nodig je team uit.','<div id="admin-content"><div class="loading"><span class="spinner"></span>Bedrijven laden…</div></div>','admin','<button class="btn" id="add-company">' + icon('plus') + ' Bedrijf toevoegen</button>');
+  $('#add-company').addEventListener('click',() => companyForm());
+  try {
+    const {companies = []} = await Portal.api('/api/admin/companies');
+    if (adminView !== currentView) return;
+    const container = $('#admin-content'); container.innerHTML = '<section class="stats-grid"><div class="card stat-card"><div class="stat-top">Bedrijven ' + icon('building') + '</div><strong class="stat-value" id="company-count"></strong><span class="stat-caption">Elk bedrijf heeft een eigen portaal</span></div><div class="card stat-card"><div class="stat-top">Actieve portalen ' + icon('check') + '</div><strong class="stat-value" id="active-company-count"></strong><span class="stat-caption">Klaar om talent te ontvangen</span></div><div class="card stat-card"><div class="stat-top">Eén omgeving ' + icon('shield') + '</div><strong class="stat-value">100%</strong><span class="stat-caption">Gescheiden toegang per bedrijf</span></div></section><section class="card"><div class="panel-header"><div><h2>Bedrijven & portalen</h2><p>Een eigen uitstraling, dezelfde vertrouwde ervaring.</p></div></div><div class="company-card"><div class="company-list" id="company-list"></div></div></section><div class="dashboard-note"><span>' + icon('info') + ' Een nieuw bedrijf is na het opslaan direct bereikbaar via zijn eigen sollicitatielink.</span></div>';
+    put('#company-count',companies.length); put('#active-company-count',companies.filter(company => Number(company.is_active) === 1 || company.is_active === true).length);
+    if (!companies.length) { empty('#company-list','Het begint met een bedrijf','Voeg het eerste bedrijf toe en richt het sollicitatieportaal in.','building'); return; }
+    for (const company of companies) {
+      const row = el('article','company-admin-row'); const swatch = el('span','company-swatch',initials(company.name)); const color = company.theme?.primary_color; if (/^#[0-9a-f]{6}$/i.test(color || '')) { swatch.style.setProperty('--swatch',color); swatch.style.setProperty('--swatch-ink',Portal.colorText(color)); }
+      if (logoUrl(company.theme)) { const logo = el('img','brand-logo'); logo.src = logoUrl(company.theme); logo.alt = ''; swatch.replaceChildren(logo); swatch.classList.add('has-logo'); }
+      const copy = el('div','company-name'); copy.append(el('h3','',company.name),el('p','',company.slug));
+      const edit = el('button','btn btn-secondary btn-small','Beheren'); edit.addEventListener('click',() => companyForm(company));
+      const open = el('a','text-btn','Portaal bekijken'); open.href = '/apply.html?company=' + encodeURIComponent(company.slug); open.target = '_blank'; open.rel = 'noopener';
+      row.append(swatch,copy,statusBadge(Number(company.is_active) === 1 || company.is_active === true ? 'active' : 'inactive'),open,edit); $('#company-list').append(row);
+    }
+  } catch (error) { if (adminView !== currentView) return; message('#page-message',error.message); empty('#admin-content','Bedrijven niet opgehaald','Vernieuw de pagina om het opnieuw te proberen.','building'); }
+}
+
+async function companyForm(company = null) {
+  adminView = {};
+  const editing = !!company; const container = $('#admin-content'); $('#add-company').hidden = true; message('#page-message','');
+  put('#page-title',editing ? 'Geef je portaal een eigen gezicht.' : 'Een nieuw verhaal begint hier.');
+  put('#page-subtitle',editing ? 'Pas het bedrijf aan en beheer wie toegang krijgt.' : 'Voeg een bedrijf toe. Het portaal is na opslaan direct beschikbaar.');
+  container.innerHTML = `<button class="back-link text-btn" id="back-to-companies">${icon('back')} Terug naar bedrijven</button><div class="admin-grid"><div><section class="card admin-form-card"><h2 id="company-form-title"></h2><p class="small muted">Alles wat je nodig hebt voor een herkenbaar sollicitatieportaal.</p><form id="company-form" enctype="multipart/form-data"><div class="form-section-label">Bedrijfsgegevens</div><div class="form-row stack-mobile"><label class="field"><span class="field-label">Bedrijfsnaam *</span><input class="input" name="name" required maxlength="150" placeholder="Naam van het bedrijf"></label><label class="field"><span class="field-label">Unieke slug *</span><input class="input" name="slug" required maxlength="80" pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="jouw-bedrijf"><span class="field-help">Alleen kleine letters, cijfers en koppeltekens.</span></label></div><label class="checkbox-label"><input type="checkbox" name="is_active" value="1" checked>Dit bedrijf is actief en ontvangt sollicitaties</label><div class="copy-link"><a id="application-link" target="_blank" rel="noopener"></a><button type="button" id="copy-application-link">Kopiëren</button></div><div class="form-section-label">Een eigen uitstraling</div><div class="form-row"><label class="field"><span class="field-label">Primaire kleur</span><span class="color-field"><input type="color" id="primary-picker" value="#263c3b" aria-label="Kies primaire kleur"><input class="input" name="primary_color" value="#263c3b" pattern="#[0-9a-fA-F]{6}" required maxlength="7" aria-label="Primaire hexkleur"></span></label><label class="field"><span class="field-label">Accentkleur</span><span class="color-field"><input type="color" id="secondary-picker" value="#b5d4bd" aria-label="Kies accentkleur"><input class="input" name="secondary_color" value="#b5d4bd" pattern="#[0-9a-fA-F]{6}" required maxlength="7" aria-label="Accent hexkleur"></span></label></div><label class="field"><span class="field-label">Lettertypenaam</span><input class="input" name="font_family" maxlength="80" placeholder="Bijvoorbeeld: Arial"><span class="field-help">Zonder eigen lettertype gebruikt het portaal het systeemlettertype.</span></label><div class="form-row stack-mobile"><div class="field"><span class="field-label">Bedrijfslogo</span><div class="company-logo-preview"><img id="company-logo-image" alt="Bedrijfslogo" hidden><span id="company-logo-empty" class="small muted">Nog geen logo toegevoegd</span></div><label class="field-help" for="company-logo-upload">Logo kiezen of vervangen</label><input class="input" id="company-logo-upload" type="file" name="logo" accept=".png,.jpg,.jpeg,.svg,.webp"><span class="field-help">PNG, JPG, SVG of WebP · maximaal 2 MB. Dit logo verschijnt voor alle accounts en op het sollicitatieportaal van dit bedrijf.</span><label class="checkbox-label" id="remove-logo-field" hidden><input type="checkbox" name="remove_logo" value="1">Huidig logo verwijderen</label><button type="button" class="text-btn" id="reset-logo-choice" hidden>Bestandskeuze wissen</button><span id="logo-status" class="field-help" role="status"></span></div><label class="field"><span class="field-label">Lettertypebestand (optioneel)</span><input class="input" type="file" name="font_file" accept=".ttf,.woff2"><span class="field-help">TTF of WOFF2 · maximaal 1 MB</span></label></div><div class="form-section-label">E-mail & communicatie</div><div class="form-row stack-mobile"><label class="field"><span class="field-label">Afzendernaam *</span><input class="input" name="mail_from_name" maxlength="150" placeholder="Naam in de inbox" required></label><label class="field"><span class="field-label">Afzenderadres *</span><input class="input" type="email" name="mail_from_address" maxlength="254" placeholder="sollicitaties@bedrijf.nl" required></label></div><details><summary class="small">E-mailsjablonen aanpassen</summary><label class="field"><span class="field-help">Optioneel. Sleutels: verify_email, application_received, application_rejected, set_password, appointment_confirmation, appointment_cancelled, employee_appointment_confirmation en employee_appointment_cancelled. Per type: {"subject":"Onderwerp","body":"Bericht"}. Placeholders: {company_name}, {name}, {verification_url}, {setup_url}, {starts_at}, {employee_name} en {applicant_name}.</span><textarea class="input" name="mail_templates" rows="8" spellcheck="false" aria-label="E-mailsjablonen als JSON"></textarea></label></details><div class="form-section-label">Agenda-uitnodigingen</div><p class="small muted">Bij het plannen of annuleren van een gesprek ontvangen de sollicitant en medewerker een e-mail met een agenda-uitnodiging. Deze kan worden geopend in onder andere Outlook en Google Agenda.</p><div id="company-form-message" class="message" hidden></div><button class="btn" type="submit" id="save-company">${icon('check')} Bedrijf opslaan</button></form></section><section class="card admin-form-card" id="employee-management" ${editing ? '' : 'hidden'}><h2>Het team achter het portaal</h2><p class="small muted">Medewerkers ontvangen per e-mail een uitnodiging om hun wachtwoord in te stellen. Nieuwe medewerkers zijn standaard beschikbaar van maandag tot en met vrijdag, 09:00 tot 17:00. Pas hun werktijden hieronder aan.</p><div id="employee-list"><div class="loading"><span class="spinner"></span>Medewerkers laden…</div></div><hr class="section-divider"><h3>Medewerker uitnodigen</h3><form id="employee-form" class="inline-form employee-invite-form"><label class="field"><span class="field-label">Naam</span><input class="input" name="name" required maxlength="150" placeholder="Voor- en achternaam"></label><label class="field"><span class="field-label">E-mailadres</span><input class="input" type="email" name="email" required maxlength="254" placeholder="collega@bedrijf.nl"></label><label class="field"><span class="field-label">Afdeling <span class="required">*</span></span><select class="input" name="department" required></select></label><button class="btn" type="submit">${icon('plus')} Uitnodigen</button></form><div id="employee-message" class="message" hidden></div></section></div><aside><section class="card preview-card"><div class="preview-label">Live voorbeeld van je portaal</div><div class="preview-inner" id="theme-preview"><div class="preview-brand"><span class="preview-mark" id="preview-mark"></span><img id="preview-logo" alt="Logovoorbeeld" hidden><span id="preview-company-name">Jouw bedrijf</span></div><span class="hero-tag">Ruimte voor jouw talent</span><h3>Een mooie stap<br>begint bij jou.</h3><p>Laat van je horen. We zijn benieuwd naar jouw verhaal.</p><div class="preview-field"></div><div class="preview-field"></div><div class="preview-btn">Verstuur mijn sollicitatie →</div></div><div class="preview-accent" id="preview-accent"></div></section><section class="help-card"><h3>Direct klaar voor gebruik</h3><p>De sollicitatielink, het thema en e-mails gebruiken de gegevens van dit bedrijf. Een eigen portaal, zonder extra stappen.</p></section></aside></div>`;
+  put('#company-form-title',editing ? 'Bedrijf wijzigen' : 'Bedrijf toevoegen');
+  $('#back-to-companies').addEventListener('click',adminPage);
+  const form = $('#company-form');
+  const formMessage = $('#company-form-message');
+  if (editing) {
+    for (const name of ['name','slug','mail_from_name','mail_from_address']) form.elements[name].value = company[name] || '';
+    form.elements.is_active.checked = Number(company.is_active) === 1 || company.is_active === true;
+    for (const name of ['primary_color','secondary_color','font_family']) if (company.theme?.[name]) form.elements[name].value = company.theme[name];
+    if (company.mail_templates && Object.keys(company.mail_templates).length) form.elements.mail_templates.value = JSON.stringify(company.mail_templates,null,2);
   }
+  const storedLogo = logoUrl(company?.theme);
+  let selectedLogo = '';
+  let logoRequest = 0;
+  let previewFont = '';
+  let fontRequest = 0;
+  const previewFontPrefix = 'PortalPreviewFont' + Date.now();
+  $('#remove-logo-field').hidden = !storedLogo;
+  function previewLogo() {
+    const removed = form.elements.remove_logo.checked;
+    const url = removed ? '' : selectedLogo || storedLogo;
+    for (const id of ['company-logo-image','preview-logo']) {
+      const image = $('#' + id); image.hidden = !url;
+      image.alt = 'Logo van ' + (form.elements.name.value || 'dit bedrijf');
+      if (url) image.src = url; else image.removeAttribute('src');
+    }
+    $('#company-logo-empty').hidden = !!url;
+    $('#company-logo-empty').textContent = removed ? 'Het logo wordt na opslaan verwijderd.' : 'Nog geen logo toegevoegd';
+    $('#preview-mark').hidden = !!url;
+    $('#reset-logo-choice').hidden = !form.elements.logo.files.length;
+    const file = form.elements.logo.files[0];
+    put('#logo-status',form.elements.logo.validationMessage || (removed ? 'Klik op Bedrijf opslaan om het logo te verwijderen.' : file ? 'Gekozen: ' + file.name + '. Klik op Bedrijf opslaan om dit logo te gebruiken.' : storedLogo ? 'Huidig bedrijfslogo. Kies een bestand om het te vervangen.' : 'Kies een bestand en klik op Bedrijf opslaan.'));
+  }
+  function preview() {
+    const name = form.elements.name.value || 'Jouw bedrijf'; put('#preview-company-name',name);
+    const primary = form.elements.primary_color.value; const secondary = form.elements.secondary_color.value;
+    if (/^#[a-f0-9]{6}$/i.test(primary)) $('#primary-picker').value = primary;
+    if (/^#[a-f0-9]{6}$/i.test(secondary)) $('#secondary-picker').value = secondary;
+    Portal.applyTheme({primary_color:primary,secondary_color:secondary,font_family:form.elements.font_family.value},$('.preview-card'));
+    $('#theme-preview').style.fontFamily = previewFont ? '"' + previewFont + '",system-ui,sans-serif' : '';
+    previewLogo();
+    const slug = form.elements.slug.value; const valid = /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug); const link = $('#application-link'); link.textContent = valid ? location.origin + '/apply.html?company=' + slug : 'Vul een slug in om de sollicitatielink te maken'; if (valid) link.href = '/apply.html?company=' + encodeURIComponent(slug); else link.removeAttribute('href'); $('#copy-application-link').disabled = !valid;
+  }
+  ['name','slug','primary_color','secondary_color','font_family'].forEach(name => form.elements[name].addEventListener('input',preview));
+  for (const color of ['primary','secondary']) $('#' + color + '-picker').addEventListener('input',event => { form.elements[color + '_color'].value = event.currentTarget.value; preview(); });
+  form.elements.logo.addEventListener('change',() => {
+    const request = ++logoRequest; const file = form.elements.logo.files[0]; selectedLogo = '';
+    if (file) form.elements.remove_logo.checked = false;
+    form.elements.logo.setCustomValidity(file && file.size > 2*1024*1024 ? 'Het logo mag maximaal 2 MB zijn.' : file && !/\.(png|jpe?g|svg|webp)$/i.test(file.name) ? 'Kies een PNG-, JPG-, SVG- of WebP-bestand.' : '');
+    previewLogo();
+    if (file && form.elements.logo.validity.valid) {
+      const reader = new FileReader();
+      reader.addEventListener('load',() => { if (!form.isConnected || request !== logoRequest) return; selectedLogo = String(reader.result); previewLogo(); });
+      reader.addEventListener('error',() => { if (form.isConnected && request === logoRequest) put('#logo-status','Het voorbeeld kon niet worden geladen. Kies het bestand opnieuw.'); });
+      reader.readAsDataURL(file);
+    }
+  });
+  form.elements.remove_logo.addEventListener('change',() => { ++logoRequest; selectedLogo = ''; form.elements.logo.value = ''; form.elements.logo.setCustomValidity(''); previewLogo(); });
+  $('#reset-logo-choice').addEventListener('click',() => { ++logoRequest; selectedLogo = ''; form.elements.logo.value = ''; form.elements.logo.setCustomValidity(''); previewLogo(); });
+  form.elements.font_file.addEventListener('change',async () => {
+    const request = ++fontRequest; const file = form.elements.font_file.files[0]; previewFont = '';
+    form.elements.font_file.setCustomValidity(file && file.size > 1024*1024 ? 'Het lettertype mag maximaal 1 MB zijn.' : ''); preview();
+    if (file && file.size <= 1024*1024) {
+      try { const name = previewFontPrefix + request; const face = new FontFace(name,await file.arrayBuffer()); await face.load(); if (!form.isConnected || request !== fontRequest) return; document.fonts.add(face); previewFont = name; preview(); }
+      catch (_) { if (form.isConnected && request === fontRequest) message(formMessage,'Het lettertype kan niet in het voorbeeld worden getoond. De server controleert het bestand bij opslaan.','info'); }
+    }
+  });
+  $('#copy-application-link').addEventListener('click',async event => { const button = event.currentTarget; try { await navigator.clipboard.writeText($('#application-link').href); button.textContent = 'Gekopieerd'; } catch (_) { message('#company-form-message','Selecteer en kopieer de link handmatig.','info'); } });
+  form.addEventListener('submit',async event => {
+    event.preventDefault(); const button = $('#save-company'); message('#company-form-message','');
+    const templates = form.elements.mail_templates.value.trim(); if (templates) { try { const value = JSON.parse(templates); if (!value || Array.isArray(value) || typeof value !== 'object') throw new Error(); } catch (_) { message('#company-form-message','De e-mailsjablonen moeten een geldig JSON-object zijn.'); return; } }
+    busy(button,true);
+    try { const data = new FormData(form); data.set('is_active',form.elements.is_active.checked ? '1' : '0'); if (!templates) data.set('mail_templates','{}'); if (editing) data.set('_method','PATCH'); const saved = await Portal.api('/api/admin/companies' + (editing ? '/' + company.id : ''),{method:'POST',body:data}); if (editing && Number(company.id) === Number(Portal.companyInfo.id)) { const savedSlug = saved.company?.slug || data.get('slug'); const savedActive = Number(saved.company?.is_active ?? data.get('is_active')) === 1; location.href = savedActive ? '/admin.html?company=' + encodeURIComponent(savedSlug) : '/index.html'; return; } if (!form.isConnected) return; await adminPage(); message('#page-message',editing ? 'De bedrijfsgegevens en het thema zijn bijgewerkt.' : 'Het bedrijf is toegevoegd. Het sollicitatieportaal is direct beschikbaar.','success'); }
+    catch (error) { if (form.isConnected) message(formMessage,error.message); busy(button,false); }
+  });
+  preview(); window.scrollTo({top:0,behavior:'smooth'});
+  const storedFont = company?.theme?.font_url;
+  if (typeof storedFont === 'string' && /^\/themes\/[a-z0-9-]+\/[a-zA-Z0-9_.-]+\.(woff2|ttf)$/i.test(storedFont)) {
+    const request = ++fontRequest; const name = previewFontPrefix + request;
+    const face = new FontFace(name,'url("' + storedFont + '")');
+    face.load().then(() => { if (!form.isConnected || request !== fontRequest) return; document.fonts.add(face); previewFont = name; preview(); }).catch(() => {});
+  }
+  if (editing) {
+    populateChoices($('#employee-form').elements.department,'departments');
+    await loadEmployees(company.id);
+    if (!form.isConnected) return;
+    $('#employee-form').addEventListener('submit',async event => { event.preventDefault(); const employeeForm = event.currentTarget; const button = $('button',employeeForm); const employeeMessage = $('#employee-message'); busy(button,true); message(employeeMessage,''); try { await Portal.api('/api/admin/employees',{method:'POST',body:{company_id:company.id,name:employeeForm.elements.name.value,email:employeeForm.elements.email.value,department:employeeForm.elements.department.value}}); if (!employeeForm.isConnected) return; employeeForm.reset(); populateChoices(employeeForm.elements.department,'departments'); await loadEmployees(company.id); if (employeeForm.isConnected) message(employeeMessage,'De medewerker is toegevoegd en ontvangt een uitnodiging.','success'); } catch (error) { if (employeeForm.isConnected) message(employeeMessage,error.message); } finally { busy(button,false); } });
+  }
+}
+
+function normalizeWorkingHours(hours) {
+  if (!Array.isArray(hours) || hours.length > 28) throw new Error('Gebruik maximaal 28 werktijden per week.');
+  const normalized = hours.map(hour => {
+    const weekday = Number(hour.weekday);
+    const start = String(hour.start_time || ''); const end = String(hour.end_time || '');
+    const validTime = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+    if (!Number.isInteger(weekday) || weekday < 1 || weekday > 7 || !validTime.test(start) || !validTime.test(end) || start >= end) {
+      throw new Error('Kies een weekdag en een eindtijd die na de begintijd ligt.');
+    }
+    return {weekday,start_time:start,end_time:end};
+  }).sort((first,second) => first.weekday - second.weekday || first.start_time.localeCompare(second.start_time));
+  for (let index = 1; index < normalized.length; index++) {
+    const previous = normalized[index - 1]; const current = normalized[index];
+    if (previous.weekday === current.weekday && current.start_time < previous.end_time) throw new Error('Werktijden op dezelfde dag mogen elkaar niet overlappen.');
+  }
+  return normalized;
+}
+
+function employeeHoursEditor(employee, companyId) {
+  const details = el('details','employee-hours');
+  const summary = el('summary','small','Werktijden van ' + employee.name); details.append(summary);
+  const form = el('form','employee-hours-form');
+  form.append(el('p','field-help','Alle tijden zijn in de Nederlandse tijdzone. Je kunt meerdere tijdvakken per dag toevoegen. Zonder werktijden kunnen er geen nieuwe gesprekken worden geboekt. Bestaande afspraken blijven staan.'));
+  const rows = el('div','hours-rows'); const emptyHours = el('p','small muted','Nog geen werktijden ingesteld.');
+  const actions = el('div','hours-actions');
+  const add = el('button','btn btn-secondary btn-small','Tijdvak toevoegen'); add.type = 'button';
+  const save = el('button','btn btn-small','Werktijden opslaan'); save.type = 'submit';
+  const result = el('div','message'); result.hidden = true;
+  const weekdays = ['Maandag','Dinsdag','Woensdag','Donderdag','Vrijdag','Zaterdag','Zondag'];
+  const update = () => { emptyHours.hidden = rows.children.length > 0; add.disabled = rows.children.length >= 28; };
+  function addHour(hour = {weekday:1,start_time:'09:00',end_time:'17:00'}) {
+    if (rows.children.length >= 28) return;
+    const row = el('div','hours-row');
+    const dayField = el('label','field'); const day = el('select','input'); day.name = 'weekday'; day.required = true;
+    weekdays.forEach((label,index) => { const option = el('option','',label); option.value = String(index + 1); day.append(option); }); day.value = String(hour.weekday);
+    dayField.append(el('span','field-label','Weekdag'),day); row.append(dayField);
+    for (const [name,label] of [['start_time','Van'],['end_time','Tot']]) {
+      const field = el('label','field'); const input = el('input','input'); input.type = 'time'; input.name = name; input.required = true; input.step = '60'; input.value = String(hour[name] || '').slice(0,5);
+      field.append(el('span','field-label',label),input); row.append(field);
+    }
+    const remove = el('button','text-btn','Verwijderen'); remove.type = 'button'; remove.setAttribute('aria-label','Dit tijdvak verwijderen');
+    remove.addEventListener('click',() => { row.remove(); update(); }); row.append(remove); rows.append(row); update();
+  }
+  add.addEventListener('click',() => addHour());
+  for (const hour of employee.working_hours || []) addHour(hour);
+  update(); actions.append(add,save); form.append(rows,emptyHours,actions,result); details.append(form);
+  form.addEventListener('submit',async event => {
+    event.preventDefault(); message(result,'');
+    let workingHours;
+    try { workingHours = normalizeWorkingHours([...rows.children].map(row => ({weekday:$('[name=weekday]',row).value,start_time:$('[name=start_time]',row).value,end_time:$('[name=end_time]',row).value}))); }
+    catch (error) { message(result,error.message); return; }
+    busy(save,true);
+    try {
+      await Portal.api('/api/admin/employees/' + employee.id,{method:'PATCH',body:{company_id:companyId,working_hours:workingHours}});
+      if (!form.isConnected) return;
+      employee.working_hours = workingHours; message(result,'De werktijden zijn opgeslagen.','success');
+    } catch (error) { if (form.isConnected) message(result,error.message); }
+    finally { busy(save,false); }
+  });
+  return details;
+}
+
+async function loadEmployees(companyId) {
+  const container = $('#employee-list');
+  if (!container) return;
+  try {
+    const {employees = []} = await Portal.api('/api/admin/employees',{params:{company_id:companyId}});
+    if (!container.isConnected) return;
+    container.replaceChildren();
+    if (!employees.length) { empty(container,'Nog niemand uitgenodigd','Voeg hieronder een medewerker toe om sollicitaties te beoordelen.','users'); return; }
+    for (const employee of employees) {
+      const row = el('div','employee-row'); const info = el('div','employee-info'); info.append(el('strong','',employee.name),el('small','',employee.email)); const active = Number(employee.is_active) === 1 || employee.is_active === true;
+      row.append(el('span','avatar',initials(employee.name)),info,statusBadge(active ? 'active' : 'inactive'));
+      if (active) { const deactivate = el('button','text-btn','Deactiveren'); deactivate.addEventListener('click',() => confirmDialog('Medewerker deactiveren?',employee.name + ' kan hierna niet meer inloggen in dit portaal.','Deactiveren',async () => { await Portal.api('/api/admin/employees/' + employee.id,{method:'PATCH',body:{company_id:companyId,is_active:false}}); if (!row.isConnected) return; await loadEmployees(companyId); message('#employee-message','De medewerker is gedeactiveerd.','success'); },true)); row.append(deactivate); }
+      const departmentForm = el('form','employee-department-form');
+      const departmentField = el('label','field'); const departmentSelect = el('select','input'); departmentSelect.name = 'department'; departmentSelect.required = true;
+      departmentField.append(el('span','field-label','Afdeling van ' + employee.name),departmentSelect); populateChoices(departmentSelect,'departments',employee.department);
+      const saveDepartment = el('button','btn btn-secondary btn-small','Afdeling opslaan'); saveDepartment.type = 'submit'; departmentForm.append(departmentField,saveDepartment);
+      departmentForm.addEventListener('submit',async event => {
+        event.preventDefault(); const target = $('#employee-message'); busy(saveDepartment,true); message(target,'');
+        try {
+          await Portal.api('/api/admin/employees/' + employee.id,{method:'PATCH',body:{company_id:companyId,department:departmentSelect.value}});
+          if (!row.isConnected) return;
+          await loadEmployees(companyId); if (target?.isConnected) message(target,'De afdeling van ' + employee.name + ' is bijgewerkt.','success');
+        } catch (error) { if (target?.isConnected) message(target,error.message); }
+        finally { busy(saveDepartment,false); }
+      });
+      row.append(departmentForm,employeeHoursEditor(employee,companyId));
+      container.append(row);
+    }
+  } catch (error) { if (container.isConnected) empty(container,'Medewerkers niet opgehaald',error.message,'users'); }
+}
+
+
+function dashboardPage() {
+  if (!requireRole(['applicant'])) return;
+  const user = Portal.session.user;
   shell('Een mooie volgende stap.','Je sollicitatie is goedgekeurd. Fijn dat je er bent.', '<section class="card detail-card"><h2>Welkom bij <span data-company-name></span></h2><p id="applicant-welcome"></p><p><span class="badge approved">Sollicitatie goedgekeurd</span></p><p class="small muted">Je persoonlijke account is klaar. Kies een beschikbaar moment voor een kennismakingsgesprek.</p><a class="btn" href="' + Portal.link('schedule.html') + '">Naar mijn gesprek ' + icon('calendar') + '</a><dl><div class="detail-item"><dt>Naam</dt><dd id="account-name"></dd></div><div class="detail-item"><dt>E-mailadres</dt><dd id="account-email"></dd></div></dl></section>', 'dashboard');
   put('#applicant-welcome','Bedankt voor je interesse, ' + user.name + '. Ons team heeft je sollicitatie bekeken en kijkt uit naar een kennismaking.');
   put('#account-name',user.name); put('#account-email',user.email);
@@ -346,7 +563,7 @@ async function start() {
   if (!Portal.validCompany || !Portal.companyInfo) { neutral(Portal.themeError || undefined); return; }
   try { Portal.session = await Portal.api('/api/session'); }
   catch (error) { neutral(error.message); return; }
-  const pages = {index:applyPage,apply:applyPage,login:loginPage,'set-password':setPasswordPage,'verify-email':verifyPage,employee:employeePage,dashboard:dashboardPage,schedule:schedulePage};
+  const pages = {index:applyPage,apply:applyPage,login:loginPage,'set-password':setPasswordPage,'verify-email':verifyPage,employee:employeePage,dashboard:dashboardPage,schedule:schedulePage,admin:adminPage};
   try { await (pages[page] || applyPage)(); }
   catch (error) { neutral('Het portaal kon niet worden geladen. ' + error.message); }
 }

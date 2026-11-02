@@ -1,7 +1,6 @@
 <?php
 declare(strict_types=1);
 
-// Kleine, fictieve PDF-fixtures maken de lokale voorbeeldsollicitaties downloadbaar.
 $directory = dirname(__DIR__) . '/storage/uploads/samples';
 if (!is_dir($directory)) {
     mkdir($directory, 0700, true);

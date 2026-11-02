@@ -5,7 +5,8 @@ hun gegevens, cv en motivatie in. Medewerkers van de juiste afdeling beoordelen 
 sollicitatie. Na goedkeuring krijgt de sollicitant een link om een wachtwoord te kiezen.
 
 Deze versie bevat sollicitaties, accounts, e-mailverificatie, beoordeling, gespreksplanning
-en de mailwachtrij met agenda-uitnodigingen. De beheeromgeving volgt later.
+en de mailwachtrij met agenda-uitnodigingen. Beheerders beheren bedrijven, huisstijlen,
+medewerkers, afdelingen en werktijden via de beheeromgeving.
 Alle aanvullingen komen rechtstreeks in dezelfde projectmap.
 
 ## Starten
@@ -25,9 +26,9 @@ Bij een **nieuwe installatie**:
 1. Maak een lege MariaDB-database en geef je databasegebruiker toegang.
 2. Kopieer `.env.example` naar `.env` en vul de databasegegevens in.
 3. Voer `php scripts/generate-key.php` uit en zet de volledige uitvoer, inclusief `base64:`, achter `APP_KEY=` in `.env`.
-4. Voer eenmalig `php scripts/setup.php --seed` uit voor de tabellen en voorbeeldbedrijven.
-5. Voer `php scripts/seed-demo-accounts.php` uit voor de lokale medewerkersaccounts.
-6. Voer `php scripts/seed-demo-hours.php` uit voor hun beschikbare werktijden.
+4. Voer eenmalig `php scripts/setup.php` uit om de tabellen aan te maken.
+5. Stel `APP_URL` en SMTP in en maak één eigen beheerder aan met `scripts/create-admin.php`, zoals beschreven bij **Beheer**.
+6. Voer `php scripts/mail-worker.php` uit en stel via de ontvangen activatielink het beheerderswachtwoord in.
 
 Bij een **bestaande database**:
 
@@ -35,9 +36,10 @@ Bewaar je `.env` en database. Het schema is gelijk aan de vorige versie; er is g
 migratie nodig. Voer `setup.php` niet opnieuw uit op een gevulde database. Voeg de nieuwe
 instellingen uit `.env.example` aan je `.env` toe. Vul eenmalig `APP_KEY` in als die nog leeg
 is. Bewaar een bestaande sleutel: eerder klaargezette mails zijn daarmee versleuteld.
-Voer `php scripts/seed-demo-accounts.php` uit om ontbrekende demoaccounts toe te voegen.
-Voer daarna `php scripts/seed-demo-hours.php` uit om ontbrekende demo-werktijden toe te voegen.
-Dit bewaart bestaande accounts, documenten, afspraken en aangepaste werktijden.
+Gebruik de bestaande beheerder. Als er nog geen beheerder is, maak die eenmalig aan
+via de procedure bij **Beheer**. Het verwijderen van voorbeeldbestanden uit de broncode
+wijzigt geen bestaande databaseaccounts of dossiers; controleer een bestaande database
+afzonderlijk voordat je die online gebruikt.
 
 Start je database apart en voer daarna uit:
 
@@ -45,32 +47,50 @@ Start je database apart en voer daarna uit:
 php scripts/serve.php
 ```
 
-Open [het portaal](http://127.0.0.1:8080/) en kies een bedrijf, of open direct:
-
-- [Scabro: solliciteren](http://127.0.0.1:8080/apply.html?company=scabro).
-- [Scabro: inloggen](http://127.0.0.1:8080/login.html?company=scabro).
-- [Voorbeeldbedrijf: solliciteren](http://127.0.0.1:8080/apply.html?company=demo).
-- [Voorbeeldbedrijf: inloggen](http://127.0.0.1:8080/login.html?company=demo).
+Open [het portaal](http://127.0.0.1:8080/) en kies het ingestelde bedrijf.
+De rechtstreekse links gebruiken de eigen bedrijfsslug, bijvoorbeeld
+`/apply.html?company=mijn-bedrijf` en `/login.html?company=mijn-bedrijf`.
+De aanwezige Scabro-huisstijl blijft beschikbaar voor een bedrijf met slug `scabro`;
+de huisstijlbestanden maken zelf geen bedrijf of accounts aan.
 
 Stop met Ctrl+C. Als `php` niet wordt gevonden, gebruik dan de volledige locatie van je
 PHP-programma. `APP_URL` moet overeenkomen met het adres waarop je de website opent.
 
-## Lokale medewerkersaccounts
+## Medewerkersaccounts
 
-Het demoscript werkt alleen met `APP_ENV=local` en bewaart bestaande accounts.
-Alle nieuw aangemaakte demoaccounts gebruiken `DemoPortal!2026`.
-
-| Account bij Scabro | Afdeling |
-| --- | --- |
-| `employee1@scabro.test` | Assembly technician |
-| `employee2@scabro.test` | Bodyshop coating technician |
-| `employee3@scabro.test` | Production employee drones |
-| `employee4@scabro.test` | open/intern |
-
-Voor het voorbeeldbedrijf eindigen dezelfde adressen op `@demo.test`.
+De beheerder nodigt medewerkers met hun eigen e-mailadres uit via de beheeromgeving.
 Een medewerker ziet alleen sollicitaties van de eigen afdeling binnen het eigen bedrijf.
 Via **Mijn afdeling** kan de medewerker de eigen afdeling wijzigen.
 Stages en open sollicitaties vallen samen onder **open/intern**.
+
+## Beheer
+
+De beheerrol heeft toegang tot alle bedrijven in dit portaal. Medewerkers en sollicitanten
+blijven beperkt tot hun eigen bedrijf en de toepasselijke afdeling of afspraken.
+
+In de beheeromgeving kun je:
+
+- Bedrijven toevoegen en naam, slug, afzender en actieve status wijzigen.
+- Kleuren, logo en lettertype wijzigen met een voorbeeld van de huisstijl.
+- E-mailsjablonen per bedrijf aanpassen; de beschikbare variabelen staan bij het formulier.
+- Medewerkers uitnodigen met een afdeling, hun afdeling en weekrooster wijzigen en accounts deactiveren.
+
+Een uitgenodigde medewerker ontvangt via de mailworker een eenmalige wachtwoordlink.
+Een gedeactiveerd account krijgt geen toegang meer. Het uitschakelen van een bedrijf
+maakt de bedrijfslink onbeschikbaar en bewaart de gegevens. Na een slugwijziging gebruik
+je de nieuwe bedrijfslink. Logo's worden gedeeld door de openbare en ingelogde pagina's.
+
+Maak bij de installatie één eigen beheerder via de terminal. Vervang de bedrijfsgegevens,
+het e-mailadres en de naam door je eigen gegevens:
+
+```powershell
+php scripts/create-admin.php --company-name="Mijn bedrijf" --slug=mijn-bedrijf --email=beheerder@example.nl --name=Beheerder
+```
+
+Gebruik een eigen e-mailadres en stel eerst `APP_KEY`, `APP_URL` en SMTP in.
+Dit commando werkt alleen als nog geen beheerder bestaat. Het kan een bestaand actief
+bedrijf met dezelfde slug gebruiken of een nieuw bedrijf aanmaken. Voer daarna de
+mailworker uit en stel via de ontvangen link een wachtwoord in.
 
 ## Gesprekken inplannen
 
@@ -78,9 +98,8 @@ Een goedgekeurde sollicitant kan na inloggen bij de medewerker plannen die de so
 heeft goedgekeurd. De agenda toont slots van 30 minuten tot maximaal 90 dagen vooruit.
 De tijden worden weergegeven in **Europe/Amsterdam** en opgeslagen in UTC.
 
-Het commando `php scripts/seed-demo-hours.php` geeft demo-medewerkers zonder bestaande
-werktijden maandag tot en met vrijdag 09:00–17:00. Het script werkt alleen lokaal en
-slaat medewerkers met een bestaand rooster over. Voer eerst het medewerkersscript uit.
+Nieuwe medewerkers krijgen via de beheeromgeving standaard werktijden van maandag
+tot en met vrijdag, 09:00–17:00. De beheerder kan dit rooster per medewerker aanpassen.
 Zonder werktijden zijn er geen beschikbare slots.
 
 De sollicitant kan één actieve afspraak hebben, deze annuleren en daarna opnieuw boeken.
@@ -124,7 +143,9 @@ De worker verwerkt per uitvoering maximaal 50 beschikbare berichten en stopt daa
 Voer het commando opnieuw uit na een nieuwe mailactie. Bij een mislukte aflevering wordt
 een bericht vijf minuten uitgesteld. Na vijf mislukte pogingen stopt automatisch opnieuw proberen.
 
-Een volledige test bestaat uit:
+Nodig voor een volledige test via de beheeromgeving eerst een medewerker voor de
+gekozen afdeling uit. Verwerk de uitnodigingsmail, stel het medewerkerswachtwoord in
+en controleer de werktijden. Doorloop daarna:
 
 1. Solliciteer met een uniek e-mailadres, een functie en twee PDF- of DOCX-bestanden van maximaal 5 MB.
 2. Voer de mailworker uit en bevestig je e-mailadres via de ontvangen link.
@@ -139,24 +160,53 @@ Een volledige test bestaat uit:
 Gebruik aparte browserprofielen of een privévenster voor medewerker en sollicitant.
 Bevestigings- en wachtwoordlinks zijn eenmalig en 48 uur geldig.
 Een ingelogde sollicitant kan de goedkeuringsstatus en de eigen afspraak bekijken.
+De sollicitant kan het eigen account met wachtwoordbevestiging verwijderen. Bij een
+actieve afspraak ontvangt de medewerker een agenda-annulering zonder de verwijderde
+sollicitantgegevens.
 
-## Agendatests
+## Onderhoud
 
-De zelfstandige controles voor agenda-uitnodigingen gebruiken geen database of SMTP:
+De mailworker verstuurt alleen berichten wanneer het commando wordt uitgevoerd.
+Voor periodiek gebruik moet je het commando zelf als geplande taak instellen.
+
+Het opschonen van oude dossiers gebeurt met:
 
 ```powershell
-php tests/calendar.php
+php scripts/cleanup.php
 ```
+
+Dit verwijdert afgewezen dossiers waarvan de beoordeling ouder is dan `RETENTION_DAYS`
+en nog onbevestigde aanvragen die ouder zijn dan die termijn. De standaard is 28 dagen.
+Bijbehorende accounts, documenten en relevante wachtrijgegevens worden verwijderd.
+Goedgekeurde dossiers en recentere aanvragen blijven staan. Verlopen technische gegevens
+worden ook opgeruimd. Alleen het instellen van de termijn voert geen opschoning uit.
+
+## Tests en documentatie
+
+De zelfstandige controles gebruiken geen bestaande database of externe mailontvangers.
+Hun fictieve gegevens en testfixtures dienen alleen voor regressietests en maken geen
+accounts in het portaal aan:
+
+```powershell
+php tests/run.php
+php tests/calendar.php
+php tests/smtp.php
+node tests/theme.mjs
+```
+
+Zie [het testplan](docs/testplan.md) voor de gecontroleerde flows en browseracceptatie,
+[het ontwerp](docs/ontwerp.md) voor de architectuur en [beveiliging en privacy](docs/beveiliging-en-privacy.md)
+voor de technische maatregelen en onderhoudsgrenzen.
 
 ## Bestanden
 
 - `public/`: pagina's, opmaak, JavaScript en huisstijlen.
-- `api/`: JSON-routes voor bedrijven, sessies, accounts, sollicitaties, documenten en afspraken.
+- `api/`: JSON-routes voor bedrijven, sessies, accounts, sollicitaties, documenten, afspraken en beheer.
 - `src/` en `config/`: databaseverbinding, authenticatie, uploads, mail en overige backendcode.
-- `database/`: het schema en de voorbeeldbedrijven; de seed bevat geen gebruikersaccounts.
-- `scripts/`: installatie, demoaccounts en werktijden, sleutelgeneratie, mailworker en ontwikkelserver.
-- `tests/calendar.php`: controles van uitnodigingen, annuleringen en de versleutelde agenda-inhoud.
-- `docs/ontwerp.md`: ontwerp en vervolgstappen.
+- `database/`: het databaseschema, zonder vooraf ingestelde bedrijven of accounts.
+- `scripts/`: installatie, eerste beheerder, sleutelgeneratie, mailworker, cleanup en ontwikkelserver.
+- `tests/`: zelfstandige controles van validatie, versleuteling, agenda-inhoud, SMTP en thema's.
+- `docs/`: ontwerp, testplan en beveiligings- en onderhoudsinformatie.
 
 Instellingen in `.env` en gegenereerde bestanden onder `storage/` zijn lokale gegevens.
 Git-inrichting wordt apart gedaan.

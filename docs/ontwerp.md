@@ -39,7 +39,39 @@ zetten in dezelfde transactie berichten voor beide deelnemers klaar. Een `text/c
 bevat een REQUEST of CANCEL met dezelfde afspraak-UID en een verhoogde SEQUENCE bij annuleren.
 De lokale planner synchroniseert niet met Microsoft Graph of reacties vanuit Outlook.
 
-Het bestaande schema ondersteunt deze functies al. De beheeromgeving blijft een vervolgstap.
+De beheeromgeving beheert bedrijven, huisstijlen, e-mailsjablonen, medewerkers, afdelingen
+en weekroosters. Beheerders hebben bewust toegang tot alle bedrijven; overige rollen
+worden per bedrijf gecontroleerd. Nieuwe medewerkers ontvangen een eenmalige activatielink.
+Deactiveren bewaart de gegevens maar trekt de toegang in.
+
+Het bestaande schema ondersteunt deze functies al. `scripts/cleanup.php` verwijdert oude
+afgewezen en nog onbevestigde dossiers op basis van `RETENTION_DAYS` en ruimt technische
+gegevens op. Het uitvoeren van de mailworker en cleanup moet afzonderlijk worden gepland.
+
+## Samenhang
+
+```mermaid
+flowchart LR
+    Browser[HTML, CSS en ES-modules] --> API[PHP JSON-API]
+    API --> Rollen[Sessie, bedrijf en rol]
+    Rollen --> DB[(MariaDB)]
+    Rollen --> Documenten[Private documentopslag]
+    Rollen --> Thema[Bedrijfsthema's]
+    Rollen --> Outbox[(Versleutelde mailwachtrij)]
+    Worker[Mailworker] --> Outbox
+    Worker --> SMTP[SMTP en agenda-uitnodigingen]
+    Cleanup[Cleanup-commando] --> DB
+    Cleanup --> Documenten
+```
+
+De belangrijkste relaties zijn `companies` naar `users`, `applications`, `working_hours`,
+`appointments` en `mail_queue`. Een sollicitatie verwijst naar de sollicitant en na beoordeling
+naar de beoordelende medewerker. Afspraken bewaren die medewerker als vaste gesprekspartner.
+Samengestelde bedrijfs-ID's in foreign keys begrenzen verwijzingen tussen bedrijven.
+
+De frontend gebruikt dezelfde API voor de openbare formulieren en de omgevingen voor
+medewerker, sollicitant en beheerder. De server bepaalt de bevoegdheid bij elk verzoek;
+het verbergen van een knop is geen toegangscontrole.
 
 ## Werkverdeling
 
@@ -47,8 +79,8 @@ Het bestaande schema ondersteunt deze functies al. De beheeromgeving blijft een 
 | --- | --- | --- |
 | Maandag | Projectstructuur, databaseontwerp, bedrijvenoverzicht en huisstijl. | Aanwezig. |
 | Dinsdag | Solliciteren, uploads, inloggen, verificatie, afdelingsgebonden beoordeling en e-mail. | Aanwezig. |
-| Donderdag | Beschikbaarheid, afspraken boeken en annuleren, agenda-uitnodigingen. | Toegevoegd. |
-| Vrijdag | Beheer, afronding, volledige controles en documentatie. | Gepland. |
+| Donderdag | Beschikbaarheid, afspraken boeken en annuleren, agenda-uitnodigingen. | Aanwezig. |
+| Vrijdag | Beheer, afronding, volledige controles en documentatie. | Toegevoegd. |
 
 Woensdag is geen werkdag in deze planning. Alle aanvullingen komen rechtstreeks in
 dezelfde projectmap `C:\Users\JimJonkman\Desktop\examen_code`.
