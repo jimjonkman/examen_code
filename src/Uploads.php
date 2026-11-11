@@ -201,7 +201,7 @@ final class Uploads
         } catch (HttpException $exception) {
             throw $exception;
         } catch (Throwable) {
-            Http::error('Het Word-bestand kan niet worden gelezen.', 422);
+            Http::error('Het Word-bestand kan niet worden gelezen, probeer het opnieuw, of gebruik een PDF-bestand.', 422);
         }
     }
 }
